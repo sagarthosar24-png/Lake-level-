@@ -9,43 +9,40 @@ l_level_data = np.array([89.000, 89.125, 89.250, 89.375, 89.500, 89.625, 89.750,
 l_content_data = np.array([2.870, 2.923, 2.975, 3.028, 3.080, 3.133, 3.185, 3.290, 3.304, 3.318, 3.331, 3.345, 3.359, 3.373, 3.386, 3.400, 3.430, 3.460, 3.490, 3.520, 3.550, 3.580, 3.610, 3.640, 3.671, 3.703, 3.734, 3.765, 3.796, 3.828, 3.859, 3.890, 3.906, 3.923, 3.939, 3.955, 3.971, 3.988, 4.004, 4.020, 4.049, 4.078, 4.106, 4.135, 4.164, 4.193, 4.221, 4.250, 4.279, 4.308, 4.336, 4.365, 4.394, 4.423, 4.451, 4.480, 4.503, 4.525, 4.548, 4.570, 4.593, 4.615, 4.638, 4.660, 4.683, 4.705, 4.728, 4.750, 4.773, 4.795, 4.818, 4.840, 4.866, 4.893, 4.919, 4.945, 4.971, 4.998, 5.024, 5.050, 5.161, 5.273, 5.384, 5.495, 5.606, 5.718, 5.829, 5.940])
 
 # --- 2. LAYOUT ---
-st.set_page_config(page_title="Shift Calculation Tool", layout="wide")
-st.title("⚡ Power Plant Operations")
+st.set_page_config(page_title="Power Plant Operations", layout="wide")
+st.title("⚡ Precise Shift Calculation Tool")
 
 # --- 3. INPUTS ---
 st.subheader("Current Shift Parameters")
 col1, col2 = st.columns(2)
 with col1:
     st.markdown("### Upper Reservoir")
-    u_level_in = st.number_input("Upper RL (m)", value=94.450, step=0.001, format="%.3f")
-    gen_mus_in = st.number_input("Upper PH Generation (MUS)", value=0.120, step=0.001, format="%.3f")
+    u_level_in = st.number_input("Upper RL (m)", value=94.280, step=0.001, format="%.3f")
+    gen_mus_in = st.number_input("Upper PH Generation (MUS)", value=0.270, step=0.001, format="%.3f")
 with col2:
     st.markdown("### Lower Reservoir")
-    l_level_in = st.number_input("Lower RL (m)", value=90.000, step=0.001, format="%.3f")
-    l_gen_mus_in = st.number_input("Lower PH Generation (MUS)", value=0.050, step=0.001, format="%.3f")
+    l_level_in = st.number_input("Lower RL (m)", value=92.560, step=0.001, format="%.3f")
+    l_gen_mus_in = st.number_input("Lower PH Generation (MUS)", value=0.000, step=0.001, format="%.3f")
 
 st.divider()
-gate_is_open = st.toggle("Interconnecting Gate Open?", value=False)
+gate_is_open = st.toggle("Interconnecting Gate Open?", value=True)
 if gate_is_open:
-    hours_open = st.number_input("Hours Open (Hrs)", min_value=0.0, value=6.0, step=0.5)
+    hours_open = st.number_input("Hours Open (Hrs)", min_value=0.0, value=1.0, step=0.5)
 else:
     hours_open = 0.0
     st.info("Gate is CLOSED.")
 
 # --- 4. CALCULATION ---
 if st.button("Calculate Final Levels", type="primary"):
-    # Initial Data Fetch
-    idx_u_init = (np.abs(u_level_data - u_level_in)).argmin()
-    u_start_mcm = u_content_data[idx_u_init]
-    
-    idx_l_init = (np.abs(l_level_data - l_level_in)).argmin()
-    l_start_mcm = l_content_data[idx_l_init]
+    # Initial Volume Lookup using Linear Interpolation (Precise)
+    u_start_mcm = np.interp(u_level_in, u_level_data, u_content_data)
+    l_start_mcm = np.interp(l_level_in, l_level_data, l_content_data)
 
     # Constants
     U_PH_CONV = 0.820
     L_PH_CONV = 9.360 
     
-    # 1. Immediate Generation Impacts (Initial Adjustment)
+    # 1. Immediate Generation Impacts
     u_running_mcm = u_start_mcm + (gen_mus_in * U_PH_CONV)
     l_running_mcm = l_start_mcm - (l_gen_mus_in * L_PH_CONV)
     
@@ -53,42 +50,34 @@ if st.button("Calculate Final Levels", type="primary"):
     gate_vol_total = 0.0
     if gate_is_open and hours_open > 0:
         total_min = int(hours_open * 60)
-        step_min = 1  # Finer precision (1-minute steps)
+        step_min = 1  
         
         for m in range(0, total_min, step_min):
-            # Find current RLs based on current Volume
-            curr_u_idx = (np.abs(u_content_data - u_running_mcm)).argmin()
-            curr_u_rl = u_level_data[curr_u_idx]
-            
-            curr_l_idx = (np.abs(l_content_data - l_running_mcm)).argmin()
-            curr_l_rl = l_level_data[curr_l_idx]
+            # Precise RL Lookups for the current minute using interpolation
+            curr_u_rl = np.interp(u_running_mcm, u_content_data, u_level_data)
+            curr_l_rl = np.interp(l_running_mcm, l_content_data, l_level_data)
             
             head_diff = curr_u_rl - curr_l_rl
             
-            # Flow stops if levels equalize or reverse
+            # Flow stops if levels equalize
             if head_diff <= 0:
                 break
                 
-            # Rate logic based on Level Difference
+            # Flow Rate Logic
             if head_diff > 3.0: rate = 0.17
             elif 2.0 <= head_diff <= 3.0: rate = 0.15
             elif 1.5 <= head_diff < 2.0: rate = 0.12
             else: rate = 0.08
             
-            # Volume transferred in this step (rate is MCM/hr)
             step_vol = rate * (step_min / 60)
             
-            # Update running volumes
             u_running_mcm -= step_vol
             l_running_mcm += step_vol
             gate_vol_total += step_vol
 
-    # --- FINAL RL LOOKUPS ---
-    idx_u_final = (np.abs(u_content_data - u_running_mcm)).argmin()
-    final_u_rl = u_level_data[idx_u_final]
-    
-    idx_l_final = (np.abs(l_content_data - l_running_mcm)).argmin()
-    final_l_rl = l_level_data[idx_l_final]
+    # --- FINAL PRECISE RL LOOKUPS ---
+    final_u_rl = np.interp(u_running_mcm, u_content_data, u_level_data)
+    final_l_rl = np.interp(l_running_mcm, l_content_data, l_level_data)
 
     # --- 5. RESULTS DISPLAY ---
     st.divider()
@@ -97,19 +86,19 @@ if st.button("Calculate Final Levels", type="primary"):
     with res1:
         st.header("🏁 Upper Lake")
         st.metric("Final Level", f"{final_u_rl:.3f} m")
-        st.write(f"Final Volume: **{u_running_mcm:.3f} MCM**")
+        st.write(f"Final Volume: **{u_running_mcm:.4f} MCM**")
         
     with res2:
         st.header("🏁 Lower Reservoir")
         st.metric("Final Level", f"{final_l_rl:.3f} m")
-        st.write(f"Final Volume: **{l_running_mcm:.3f} MCM**")
+        st.write(f"Final Volume: **{l_running_mcm:.4f} MCM**")
 
     # --- 6. TECHNICAL DETAILS ---
     with st.expander("Detailed Calculation Log"):
-        st.write(f"Upper Gen Addition: **{gen_mus_in * U_PH_CONV:.3f} MCM**")
-        st.write(f"Lower Gen Discharge: **{l_gen_mus_in * L_PH_CONV:.3f} MCM**")
+        st.write(f"Upper Initial Volume: **{u_start_mcm:.4f} MCM**")
+        st.write(f"Upper Gen Addition: **{gen_mus_in * U_PH_CONV:.4f} MCM**")
+        st.write(f"Lower Gen Discharge: **{l_gen_mus_in * L_PH_CONV:.4f} MCM**")
         if gate_is_open and hours_open > 0:
-            avg_rate = gate_vol_total / hours_open
-            st.write(f"Total Gate Transfer: **{gate_vol_total:.3f} MCM**")
-            st.write(f"Calculated Avg Discharge: **{avg_rate:.4f} MCM/hr**")
-            st.info("The average discharge is lower than the initial rate because the head difference decreased as water flowed.")
+            st.write(f"Total Gate Transfer: **{gate_vol_total:.4f} MCM**")
+            st.info("Interpolation (np.interp) is being used to calculate exact points between table entries.")
+            
