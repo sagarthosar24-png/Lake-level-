@@ -1,4 +1,4 @@
-import streamlit as st
+Import streamlit as st
 import numpy as np
 
 # --- 1. DATA TABLES ---
@@ -34,9 +34,12 @@ else:
 
 # --- 4. CALCULATION ---
 if st.button("Calculate Final Levels", type="primary"):
-    # Initial Data Fetch using Linear Interpolation for high precision
-    u_start_mcm = np.interp(u_level_in, u_level_data, u_content_data)
-    l_start_mcm = np.interp(l_level_in, l_level_data, l_content_data)
+    # Initial Data Fetch
+    idx_u_init = (np.abs(u_level_data - u_level_in)).argmin()
+    u_start_mcm = u_content_data[idx_u_init]
+    
+    idx_l_init = (np.abs(l_level_data - l_level_in)).argmin()
+    l_start_mcm = l_content_data[idx_l_init]
 
     # Constants
     U_PH_CONV = 0.820
@@ -53,9 +56,12 @@ if st.button("Calculate Final Levels", type="primary"):
         step_min = 1  # Finer precision (1-minute steps)
         
         for m in range(0, total_min, step_min):
-            # Precise RL Lookups based on current Volume
-            curr_u_rl = np.interp(u_running_mcm, u_content_data, u_level_data)
-            curr_l_rl = np.interp(l_running_mcm, l_content_data, l_level_data)
+            # Find current RLs based on current Volume
+            curr_u_idx = (np.abs(u_content_data - u_running_mcm)).argmin()
+            curr_u_rl = u_level_data[curr_u_idx]
+            
+            curr_l_idx = (np.abs(l_content_data - l_running_mcm)).argmin()
+            curr_l_rl = l_level_data[curr_l_idx]
             
             head_diff = curr_u_rl - curr_l_rl
             
@@ -77,9 +83,12 @@ if st.button("Calculate Final Levels", type="primary"):
             l_running_mcm += step_vol
             gate_vol_total += step_vol
 
-    # --- FINAL PRECISE RL LOOKUPS ---
-    final_u_rl = np.interp(u_running_mcm, u_content_data, u_level_data)
-    final_l_rl = np.interp(l_running_mcm, l_content_data, l_level_data)
+    # --- FINAL RL LOOKUPS ---
+    idx_u_final = (np.abs(u_content_data - u_running_mcm)).argmin()
+    final_u_rl = u_level_data[idx_u_final]
+    
+    idx_l_final = (np.abs(l_content_data - l_running_mcm)).argmin()
+    final_l_rl = l_level_data[idx_l_final]
 
     # --- 5. RESULTS DISPLAY ---
     st.divider()
@@ -88,21 +97,19 @@ if st.button("Calculate Final Levels", type="primary"):
     with res1:
         st.header("🏁 Upper Lake")
         st.metric("Final Level", f"{final_u_rl:.3f} m")
-        st.write(f"Final Volume: **{u_running_mcm:.4f} MCM**")
+        st.write(f"Final Volume: **{u_running_mcm:.3f} MCM**")
         
     with res2:
         st.header("🏁 Lower Reservoir")
         st.metric("Final Level", f"{final_l_rl:.3f} m")
-        st.write(f"Final Volume: **{l_running_mcm:.4f} MCM**")
+        st.write(f"Final Volume: **{l_running_mcm:.3f} MCM**")
 
     # --- 6. TECHNICAL DETAILS ---
     with st.expander("Detailed Calculation Log"):
-        st.write(f"Upper Initial Volume: **{u_start_mcm:.4f} MCM**")
-        st.write(f"Upper Gen Addition: **{gen_mus_in * U_PH_CONV:.4f} MCM**")
-        st.write(f"Lower Gen Discharge: **{l_gen_mus_in * L_PH_CONV:.4f} MCM**")
+        st.write(f"Upper Gen Addition: **{gen_mus_in * U_PH_CONV:.3f} MCM**")
+        st.write(f"Lower Gen Discharge: **{l_gen_mus_in * L_PH_CONV:.3f} MCM**")
         if gate_is_open and hours_open > 0:
             avg_rate = gate_vol_total / hours_open
-            st.write(f"Total Gate Transfer: **{gate_vol_total:.4f} MCM**")
+            st.write(f"Total Gate Transfer: **{gate_vol_total:.3f} MCM**")
             st.write(f"Calculated Avg Discharge: **{avg_rate:.4f} MCM/hr**")
-            st.info("Results now use linear interpolation for high sensitivity to small level changes.")
-        
+            st.info("The average discharge is lower than the initial rate because the head difference decreased as water flowed.")
