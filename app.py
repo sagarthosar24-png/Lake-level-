@@ -10,7 +10,7 @@ l_content_data = np.array([2.870, 2.923, 2.975, 3.028, 3.080, 3.133, 3.185, 3.29
 
 # --- 2. LAYOUT ---
 st.set_page_config(page_title="Power Plant Operations", layout="wide")
-st.title("⚡ Precise Shift Calculation Tool")
+st.title("⚡ High-Precision Shift Calculation")
 
 # --- 3. INPUTS ---
 st.subheader("Current Shift Parameters")
@@ -34,7 +34,7 @@ else:
 
 # --- 4. CALCULATION ---
 if st.button("Calculate Final Levels", type="primary"):
-    # Initial Volume Lookup using Linear Interpolation (Precise)
+    # USE INTERPOLATION FOR INITIAL VOLUME (Smooth results between data points)
     u_start_mcm = np.interp(u_level_in, u_level_data, u_content_data)
     l_start_mcm = np.interp(l_level_in, l_level_data, l_content_data)
 
@@ -53,17 +53,17 @@ if st.button("Calculate Final Levels", type="primary"):
         step_min = 1  
         
         for m in range(0, total_min, step_min):
-            # Precise RL Lookups for the current minute using interpolation
+            # Calculate current RLs using interpolation (Precise)
             curr_u_rl = np.interp(u_running_mcm, u_content_data, u_level_data)
             curr_l_rl = np.interp(l_running_mcm, l_content_data, l_level_data)
             
             head_diff = curr_u_rl - curr_l_rl
             
-            # Flow stops if levels equalize
+            # Stop if levels cross
             if head_diff <= 0:
                 break
                 
-            # Flow Rate Logic
+            # Flow rate logic
             if head_diff > 3.0: rate = 0.17
             elif 2.0 <= head_diff <= 3.0: rate = 0.15
             elif 1.5 <= head_diff < 2.0: rate = 0.12
@@ -95,10 +95,7 @@ if st.button("Calculate Final Levels", type="primary"):
 
     # --- 6. TECHNICAL DETAILS ---
     with st.expander("Detailed Calculation Log"):
-        st.write(f"Upper Initial Volume: **{u_start_mcm:.4f} MCM**")
+        st.write(f"Upper Start Vol: **{u_start_mcm:.4f} MCM**")
         st.write(f"Upper Gen Addition: **{gen_mus_in * U_PH_CONV:.4f} MCM**")
-        st.write(f"Lower Gen Discharge: **{l_gen_mus_in * L_PH_CONV:.4f} MCM**")
         if gate_is_open and hours_open > 0:
             st.write(f"Total Gate Transfer: **{gate_vol_total:.4f} MCM**")
-            st.info("Interpolation (np.interp) is being used to calculate exact points between table entries.")
-            
